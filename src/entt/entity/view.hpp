@@ -270,13 +270,13 @@ struct basic_view;
  * Lifetime of a view must not overcome that of the registry that generated it.
  * In any other case, attempting to use a view results in undefined behavior.
  *
- * @tparam Policy Common (stricter) storage policy.
+ * @tparam PolicyToBeRemoved Common (stricter) storage policy.
  * @tparam Entity A valid entity type (see entt_traits for more details).
- * @tparam Exclude Types of components used to filter the view.
  * @tparam Component Types of components iterated by the view.
+ * @tparam Exclude Types of components used to filter the view.
  */
-template<typename Policy, typename Entity, typename... Exclude, typename... Component>
-class basic_view_impl<Policy, Entity, exclude_t<Exclude...>, Component...> {
+template<typename PolicyToBeRemoved, typename Entity, typename... Exclude, typename... Component>
+class basic_view_impl<PolicyToBeRemoved, Entity, type_list<Component...>, type_list<Exclude...>> {
     using basic_common_type = basic_sparse_set<Entity>;
 
     template<typename Comp>
@@ -323,8 +323,8 @@ class basic_view_impl<Policy, Entity, exclude_t<Exclude...>, Component...> {
         };
 
     public:
-        using iterator = iterable_iterator<internal::view_iterator<Policy, typename basic_common_type::iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>>;
-        using reverse_iterator = iterable_iterator<internal::view_iterator<Policy, typename basic_common_type::reverse_iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>>;
+        using iterator = iterable_iterator<internal::view_iterator<PolicyToBeRemoved, typename basic_common_type::iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>>;
+        using reverse_iterator = iterable_iterator<internal::view_iterator<PolicyToBeRemoved, typename basic_common_type::reverse_iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>>;
 
         iterable(const basic_view_impl &parent)
             : view{parent}
@@ -375,7 +375,8 @@ class basic_view_impl<Policy, Entity, exclude_t<Exclude...>, Component...> {
     template<typename Comp, typename Func>
     void traverse(Func func) const {
         for(const auto curr: internal::iterable_storage<Entity, Comp>{*std::get<storage_type<Comp> *>(pools)}) {
-            if(Policy::accept(std::get<0>(curr)) && ((std::is_same_v<Comp, Component> || std::get<storage_type<Component> *>(pools)->contains(std::get<0>(curr))) && ...)
+            if(internal::stable_iteration<in_place_delete_v<std::remove_const_t<Comp>>>::accept(std::get<0>(curr))
+                && ((std::is_same_v<Comp, Component> || std::get<storage_type<Component> *>(pools)->contains(std::get<0>(curr))) && ...)
                 && std::apply([entt = std::get<0>(curr)](const auto *... cpool) { return (!cpool->contains(entt) && ...); }, filter))
             {
                 if constexpr(is_applicable_v<Func, decltype(std::tuple_cat(std::tuple<entity_type>{}, std::declval<basic_view_impl>().get({})))>) {
@@ -393,9 +394,9 @@ public:
     /*! @brief Unsigned integer type. */
     using size_type = std::size_t;
     /*! @brief Bidirectional iterator type. */
-    using iterator = internal::view_iterator<Policy, typename basic_common_type::iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>;
+    using iterator = internal::view_iterator<PolicyToBeRemoved, typename basic_common_type::iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>;
     /*! @brief Reverse iterator type. */
-    using reverse_iterator = internal::view_iterator<Policy, typename basic_common_type::reverse_iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>;
+    using reverse_iterator = internal::view_iterator<PolicyToBeRemoved, typename basic_common_type::reverse_iterator, sizeof...(Component) - 1u, sizeof...(Exclude)>;
     /*! @brief Iterable view type. */
     using iterable_view = iterable;
 
@@ -696,7 +697,7 @@ private:
  * @tparam Component Type of component iterated by the view.
  */
 template<typename Entity, typename Component>
-class basic_view_impl<packed_storage_policy, Entity, exclude_t<>, Component> {
+class basic_view_impl<packed_storage_policy, Entity, type_list<Component>, type_list<>> {
     using basic_common_type = basic_sparse_set<Entity>;
     using storage_type = constness_as_t<typename storage_traits<Entity, std::remove_const_t<Component>>::storage_type, Component>;
 
@@ -989,11 +990,11 @@ private:
  */
 template<typename Entity, typename... Exclude, typename... Component>
 struct basic_view<Entity, exclude_t<Exclude...>, Component...>
-    : basic_view_impl<internal::stable_iteration<(in_place_delete_v<std::remove_const_t<Component>> || ...)>, Entity, exclude_t<Exclude...>, Component...>
+    : basic_view_impl<internal::stable_iteration<(in_place_delete_v<std::remove_const_t<Component>> || ...)>, Entity, type_list<Component...>, type_list<Exclude...>>
 {
     /*! @brief Most restrictive storage policy of all component types. */
     using storage_policy = internal::stable_iteration<(in_place_delete_v<std::remove_const_t<Component>> || ...)>;
-    using basic_view_impl<storage_policy, Entity, exclude_t<Exclude...>, Component...>::basic_view_impl;
+    using basic_view_impl<storage_policy, Entity, type_list<Component...>, type_list<Exclude...>>::basic_view_impl;
 };
 
 

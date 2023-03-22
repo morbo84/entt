@@ -21,6 +21,8 @@ struct derived_t: base_t {
 };
 
 struct clazz_t {
+    struct inner_t {};
+
     clazz_t(const base_t &other, int &iv)
         : clazz_t{iv, other.value} {}
 
@@ -67,6 +69,9 @@ struct MetaCtor: ::testing::Test {
             .ctor<entt::overload<clazz_t(int)>(clazz_t::factory)>()
             .ctor<entt::overload<clazz_t(base_t, int, int)>(clazz_t::factory)>()
             .conv<int>();
+
+        entt::meta<clazz_t::inner_t>()
+            .type("inner"_hs);
     }
 
     void TearDown() override {
@@ -212,4 +217,10 @@ TEST_F(MetaCtor, ReRegistration) {
     ASSERT_FALSE(node.details->ctor.empty());
     // implicitly generated default constructor is not cleared
     ASSERT_NE(node.default_constructor, nullptr);
+}
+
+TEST_F(MetaCtor, DefaultConstructibleNestedClass) {
+    auto any = entt::resolve<clazz_t::inner_t>().construct();
+
+    ASSERT_TRUE(any);
 }
